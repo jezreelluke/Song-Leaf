@@ -579,8 +579,8 @@
     <div class="import-banner hidden" id="import-banner">
       <div class="icon">📖</div>
       <div class="text">
-        <h4>Add your Baptism songbook?</h4>
-        <p>33 songs from BCLP02/08 are ready to import.</p>
+        <h4 id="import-banner-title">Add included songs?</h4>
+        <p id="import-banner-desc">Some songs are ready to import.</p>
       </div>
       <div class="actions">
         <button class="btn-import-yes" id="btn-import-yes">Import all</button>
@@ -1134,6 +1134,82 @@
   var IMPORT_DISMISS_KEY = 'songleaf_import_bclp0208_dismissed';
   var SEED_TAG = 'Baptism';
   var SEED_SONGS = [
+    {
+      title: "Lord I Lift Your Name On High",
+      artist: "Rick Founds",
+      tag: "Worship",
+      lyrics: "[Verse]\n" +
+        "G          C              D    C\n" +
+        "Lord, I lift Your name on high\n" +
+        "G          C              D   Csus2\n" +
+        "Lord, I love to sing Your praises\n" +
+        "G          C              D    C\n" +
+        "I'm so glad You're in my life\n" +
+        "G          C              Dsus4 D C D\n" +
+        "I'm so glad You came to save us\n\n" +
+        "[Chorus]\n" +
+        "G              C              D\n" +
+        "You came from heaven to earth\n" +
+        "   C        G\n" +
+        "To show the way\n" +
+        "          C              D\n" +
+        "From the earth to the cross\n" +
+        "   C        G\n" +
+        "My debt to pay\n" +
+        "        Am7            D\n" +
+        "From the cross to the grave\n" +
+        "        Em             Am7\n" +
+        "From the grave to the sky\n" +
+        "    Dsus4    D        G C D C\n" +
+        "Lord, I lift Your name on high"
+    },
+    {
+      title: "One Desire",
+      artist: "Hillsong Worship",
+      tag: "Worship",
+      lyrics: "Key: E   BPM: 77   Time: 4/4\n\n" +
+        "[Intro]\n" +
+        "E/G#   A   E/G#   A\n\n" +
+        "[Verse 1]\n" +
+        "E/G#\nYou gave it all for me\n" +
+        "A\nMy soul desire, my everything\n" +
+        "E/G#            A\nAll I am is devoted to You\n\n" +
+        "[Verse 2]\n" +
+        "E/G#\nHow could I fail to see\n" +
+        "A\nYou are the love that rescued me\n" +
+        "E/G#            A\nAll I am is devoted to You\n\n" +
+        "[Pre-chorus]\n" +
+        "B                    C#m\n" +
+        "And oh, how could I not be moved?\n" +
+        "A\nLord here with You\n" +
+        "E\nSo have Your way in me\n" +
+        "B                    C#m\n" +
+        "Cause Lord there is just one thing\n" +
+        "A\nThat I will seek\n\n" +
+        "[Chorus]\n" +
+        "E                B\n" +
+        "This is my cry my one desire\n" +
+        "B/C         C#m\n" +
+        "To be where You are Lord\n" +
+        "A\nNow and forever\n" +
+        "E\nMore than a song,\n" +
+        "D            F#m\n" +
+        "My one desire is to be with You\n" +
+        "C#m   B\nIs to be with You\n\n" +
+        "[Interlude]\n" +
+        "E/G#   A   E/G#   A\nJesus\n\n" +
+        "[Verse 2]\n\n" +
+        "[Pre-chorus]\n\n" +
+        "[Chorus]\n\n" +
+        "[Instrumental]\n" +
+        "E/G#   A   E/G#   A\n\n" +
+        "[Bridge]\n" +
+        "E        F#m7   E/G#   A\n" +
+        "The one thing, the one thing,\n" +
+        "    C#m   B      E/G#   A\n" +
+        "That I ask is to be with You"
+    }
+,
     {
       title: "O Salutaris Hostia",
       artist: "Traditional Latin Hymn",
@@ -1848,20 +1924,26 @@
   var btnImportYes = document.getElementById('btn-import-yes');
   var btnImportNo = document.getElementById('btn-import-no');
 
+  var importBannerTitleEl = document.getElementById('import-banner-title');
+  var importBannerDescEl = document.getElementById('import-banner-desc');
+
+  var importBannerDismissedThisSession = false;
+
   function maybeShowImportBanner(){
-    if (localStorage.getItem(IMPORT_DISMISS_KEY)) { importBanner.classList.add('hidden'); return; }
+    if (importBannerDismissedThisSession) { importBanner.classList.add('hidden'); return; }
     var existingTitles = lyrics.map(function(l){ return (l.title||'').trim().toLowerCase(); });
-    var alreadyHave = SEED_SONGS.filter(function(s){ return existingTitles.indexOf(s.title.toLowerCase()) > -1; }).length;
-    if (alreadyHave >= SEED_SONGS.length){
-      localStorage.setItem(IMPORT_DISMISS_KEY, '1');
+    var missing = SEED_SONGS.filter(function(s){ return existingTitles.indexOf(s.title.toLowerCase()) === -1; });
+    if (missing.length === 0){
       importBanner.classList.add('hidden');
       return;
     }
+    if (importBannerTitleEl) importBannerTitleEl.textContent = missing.length === 1 ? 'Add included song?' : 'Add included songs?';
+    if (importBannerDescEl) importBannerDescEl.textContent = missing.length + (missing.length === 1 ? ' song is' : ' songs are') + ' ready to import.';
     importBanner.classList.remove('hidden');
   }
 
   function dismissImportBanner(){
-    localStorage.setItem(IMPORT_DISMISS_KEY, '1');
+    importBannerDismissedThisSession = true;
     importBanner.classList.add('hidden');
   }
 
