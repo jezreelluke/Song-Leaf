@@ -456,7 +456,7 @@
   }
   .lyric-line-chord{
     font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--vz, 1));
     color: var(--gold);
     white-space: pre;
     overflow-x: auto;
@@ -468,7 +468,7 @@
   }
   .lyric-line-meta{
     font-family: var(--sans);
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--vz, 1));
     color: var(--ink-soft);
     font-style: italic;
     line-height: 1.5;
@@ -476,7 +476,7 @@
   .lyric-line-section{
     font-family: var(--sans);
     font-weight: 700;
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--vz, 1));
     color: var(--maroon);
     margin-top: 16px;
     margin-bottom: 2px;
@@ -487,18 +487,61 @@
   }
   .lyric-line-lyric{
     font-family: var(--serif);
-    font-size: 19px;
+    font-size: calc(19px * var(--vz, 1));
     font-weight: 500;
     line-height: 1.55;
     color: var(--ink);
   }
-  .lyric-line-blank{ height: 12px; }
+  .lyric-line-blank{ height: calc(12px * var(--vz, 1)); }
   .lyric-empty{
     color: var(--ink-soft);
     font-size: 13.5px;
     font-style: italic;
     padding: 20px 0;
     text-align: center;
+  }
+  #viewer-body{
+    touch-action: pan-y;
+  }
+  .viewer-zoom-bar{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 20px;
+    border-bottom: 1px solid var(--paper-edge);
+  }
+  .viewer-zoom-btn{
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 1px solid var(--paper-edge);
+    background: transparent;
+    color: var(--ink);
+    font-size: 17px;
+    font-weight: 600;
+    font-family: var(--sans);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+  }
+  .viewer-zoom-label{
+    font-family: var(--sans);
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    min-width: 42px;
+    text-align: center;
+  }
+  .viewer-zoom-reset{
+    font-family: var(--sans);
+    font-size: 12px;
+    color: var(--ink-soft);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    text-decoration: underline;
+    margin-left: auto;
   }
 
   .toast{
@@ -665,6 +708,12 @@
           <div class="viewer-meta" id="viewer-meta"></div>
         </div>
         <button id="viewer-close">Close</button>
+      </div>
+      <div class="viewer-zoom-bar">
+        <button class="viewer-zoom-btn" id="viewer-zoom-out" aria-label="Zoom out">&minus;</button>
+        <span class="viewer-zoom-label" id="viewer-zoom-label">100%</span>
+        <button class="viewer-zoom-btn" id="viewer-zoom-in" aria-label="Zoom in">&plus;</button>
+        <button class="viewer-zoom-reset" id="viewer-zoom-reset">Reset</button>
       </div>
       <div class="sheet-body" id="viewer-body"></div>
       <div class="sheet-footer">
@@ -861,6 +910,70 @@
   var viewerCloseBtn = document.getElementById('viewer-close');
   var viewingId = null;
 
+  // ---------------- Viewer zoom (buttons, pinch, ctrl+scroll) ----------------
+  var VIEWER_ZOOM_KEY = 'songleaf_viewer_zoom';
+  var VIEWER_ZOOM_MIN = 0.7;
+  var VIEWER_ZOOM_MAX = 2.6;
+  var viewerZoomOutBtn = document.getElementById('viewer-zoom-out');
+  var viewerZoomInBtn = document.getElementById('viewer-zoom-in');
+  var viewerZoomResetBtn = document.getElementById('viewer-zoom-reset');
+  var viewerZoomLabel = document.getElementById('viewer-zoom-label');
+  var viewerZoom = 1;
+  try {
+    var storedZoom = parseFloat(localStorage.getItem(VIEWER_ZOOM_KEY));
+    if (!isNaN(storedZoom) && storedZoom >= VIEWER_ZOOM_MIN && storedZoom <= VIEWER_ZOOM_MAX) viewerZoom = storedZoom;
+  } catch (e) {}
+
+  function clampZoom(z){
+    return Math.min(VIEWER_ZOOM_MAX, Math.max(VIEWER_ZOOM_MIN, z));
+  }
+  function applyViewerZoom(){
+    viewerBodyEl.style.setProperty('--vz', viewerZoom);
+    if (viewerZoomLabel) viewerZoomLabel.textContent = Math.round(viewerZoom * 100) + '%';
+    try { localStorage.setItem(VIEWER_ZOOM_KEY, String(viewerZoom)); } catch (e) {}
+  }
+  function setViewerZoom(z){
+    viewerZoom = clampZoom(z);
+    applyViewerZoom();
+  }
+  if (viewerZoomInBtn) viewerZoomInBtn.addEventListener('click', function(){ setViewerZoom(viewerZoom + 0.1); });
+  if (viewerZoomOutBtn) viewerZoomOutBtn.addEventListener('click', function(){ setViewerZoom(viewerZoom - 0.1); });
+  if (viewerZoomResetBtn) viewerZoomResetBtn.addEventListener('click', function(){ setViewerZoom(1); });
+
+  // Pinch-to-zoom (touch) on the lyric sheet
+  var pinchStartDist = null;
+  var pinchStartZoom = 1;
+  function touchDist(touches){
+    var dx = touches[0].clientX - touches[1].clientX;
+    var dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+  viewerBodyEl.addEventListener('touchstart', function(e){
+    if (e.touches.length === 2){
+      pinchStartDist = touchDist(e.touches);
+      pinchStartZoom = viewerZoom;
+    }
+  }, { passive: true });
+  viewerBodyEl.addEventListener('touchmove', function(e){
+    if (e.touches.length === 2 && pinchStartDist){
+      e.preventDefault();
+      var newDist = touchDist(e.touches);
+      var scale = newDist / pinchStartDist;
+      setViewerZoom(pinchStartZoom * scale);
+    }
+  }, { passive: false });
+  viewerBodyEl.addEventListener('touchend', function(e){
+    if (e.touches.length < 2) pinchStartDist = null;
+  });
+
+  // Ctrl/Cmd + scroll wheel zoom (trackpad pinch on desktop browsers)
+  viewerBodyEl.addEventListener('wheel', function(e){
+    if (e.ctrlKey || e.metaKey){
+      e.preventDefault();
+      setViewerZoom(viewerZoom - e.deltaY * 0.01);
+    }
+  }, { passive: false });
+
   function openViewer(id){
     var l = lyrics.find(function(x){ return x.id === id; });
     if (!l) return;
@@ -871,6 +984,7 @@
     if (l.tag) metaBits.push(l.tag);
     viewerMetaEl.textContent = metaBits.join(' · ');
     viewerBodyEl.innerHTML = renderFormattedLyrics(l.lyrics);
+    applyViewerZoom();
     viewerOverlay.classList.remove('hidden');
   }
   function closeViewer(){
@@ -1134,6 +1248,134 @@
   var IMPORT_DISMISS_KEY = 'songleaf_import_bclp0208_dismissed';
   var SEED_TAG = 'Baptism';
   var SEED_SONGS = [
+    {
+      title: "One Family",
+      artist: "",
+      tag: "Worship",
+      lyrics: "Intro: G-Gbm-Bm-C-A-A7\n\n" +
+        "[Verse 1]\n" +
+        "D                Bm\n" +
+        "We are a group of Christian people\n" +
+        "Em              A\n" +
+        "Sharing the love of our God our Saviour\n" +
+        "Gm\n" +
+        "Praising Him and giving Him thanks\n" +
+        "E              A7\n" +
+        "For the trials and the blessings\n\n" +
+        "D                Bm\n" +
+        "As we grow from day to day\n" +
+        "Em        A\n" +
+        "He is there to guide our way\n" +
+        "G       Gm      Gbm\n" +
+        "Anything we do and anywhere we go\n" +
+        "Em           A         D-Am\n" +
+        "We are our brother's keeper we're happy too\n\n" +
+        "[Chorus 1]\n" +
+        "G\n" +
+        "The Lord our God is\n" +
+        "Gbm         B7\n" +
+        "The center of our businesses\n" +
+        "Em                A\n" +
+        "The Lord our God is the giver of our\n" +
+        "Am-D7\n" +
+        "Professions too\n" +
+        "G                Gm\n" +
+        "Let's join our hands in thanking Him\n" +
+        "Gbm          B7\n" +
+        "And praising His name\n" +
+        "Em          G-A        D Em-A\n" +
+        "For we are one family, the BCBP\n\n" +
+        "[Verse 2]\n" +
+        "D           Bm\n" +
+        "Let us spread the good news\n" +
+        "Em          A\n" +
+        "To the market places\n" +
+        "Em                A\n" +
+        "Let us invite our partners in the businesses\n" +
+        "G\n" +
+        "The Lord our God our Saviour\n" +
+        "Gbm         B7\n" +
+        "Is the center of our lives\n" +
+        "Em              A        D-Am-D7\n" +
+        "So, let us start the day of work with Christ\n\n" +
+        "[Chorus 2]\n" +
+        "G\n" +
+        "The Lord our God is\n" +
+        "Gbm         B7\n" +
+        "The center of our businesses\n" +
+        "Em                A\n" +
+        "The Lord our God is the giver of\n" +
+        "Am-D7\n" +
+        "Our professions too\n" +
+        "G                 Gm\n" +
+        "Let's sing and praise and feel the spirit\n" +
+        "Gbm         B7\n" +
+        "Of Christian unity\n" +
+        "Em      Gbm    G-A          D(Am-D7)B7\n" +
+        "For we are one family, the BCBP\n\n" +
+        "(Repeat Chorus 2)\n\n" +
+        "Em    Gbm    G-A      D-B7\n" +
+        "For we are one family, the BCBP\n" +
+        "Em    Gbm    G-A      D-Gm-D  Gbm Em\n" +
+        "For we are one family, the BCBP          A-D"
+    },
+    {
+      title: "Little By Little",
+      artist: "",
+      tag: "Worship",
+      lyrics: "[Verse 1]\n" +
+        "G\n" +
+        "Little by little everyday,\n" +
+        "C\n" +
+        "Little by little every way\n" +
+        "G                        D\n" +
+        "Jesus is changing me\n" +
+        "G\n" +
+        "Since I made a turn about face\n" +
+        "C\n" +
+        "I've been growing in his grace\n" +
+        "G          D            D C\n" +
+        "Jesus is changing me.\n\n" +
+        "[Refrain]\n" +
+        "G                                  C\n" +
+        "He's changing me, my blessed Savior\n" +
+        "         C G                        D\n" +
+        "I'm not the same person that I used to be\n" +
+        "              G - G7\n" +
+        "Though I've been slow growing\n" +
+        "    C          Am\n" +
+        "But there's a knowing\n" +
+        "          G              D            G\n" +
+        "That someday perfect I will be.\n\n" +
+        "(Repeat verse 1, counterpoint with refrain)"
+    },
+    {
+      title: "We Are An Offering",
+      artist: "",
+      tag: "Worship",
+      lyrics: "[Verse 1]\n" +
+        "              D-Em                Dsus-D7\n" +
+        "We lift our voices, we lift our hands\n" +
+        "             G      A        F#m\n" +
+        "We lift our lives up to You (they are Yours)\n" +
+        "      Bm           Em  A7sus-A7\n" +
+        "We are an offering\n\n" +
+        "[Verse 2]\n" +
+        "                D        Em            Dsus-D7\n" +
+        "Lord, use our voices, Lord use our hands\n" +
+        "            G    A           F#m\n" +
+        "Lord, use our lives, we are Yours\n" +
+        "      Bm           Em  A7sus-A7\n" +
+        "We are an offering\n\n" +
+        "[Chorus]\n" +
+        "        F#m        Bm   G                Em\n" +
+        "All that we have, all that we are,\n" +
+        "         F#      Bm             G       D\n" +
+        "All that we hope to be we give to You\n" +
+        "   G       Asus-A7\n" +
+        "We give to You\n\n" +
+        "(Repeat verse 1)"
+    },
     {
       title: "Lord I Lift Your Name On High",
       artist: "Rick Founds",
